@@ -13,9 +13,12 @@ import {
 import { CHAPTER_1_PAPER, Question, Section, ViewState, Paper } from './types';
 import { cn } from './lib/utils';
 
+import { generatePaperFromImages } from './services/geminiService';
+
 export default function App() {
   const [activeView, setActiveView] = useState<ViewState>('config');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentPaper, setCurrentPaper] = useState<Paper>(CHAPTER_1_PAPER);
   const [marks, setMarks] = useState(40);
   const [difficulty, setDifficulty] = useState('Standard');
@@ -51,20 +54,31 @@ export default function App() {
     });
   };
 
-  const handleGenerate = () => {
+  const [generationStep, setGenerationStep] = useState<string>("");
+
+  const handleGenerate = async () => {
     if (scannedImages.length === 0) {
-      alert("Please add at least one book page scan to analyze.");
+      alert("Please upload at least one textbook page image first.");
       return;
     }
+    
     setIsGenerating(true);
-    // Simulate generation delay
-    setTimeout(() => {
+    setError(null);
+    setGenerationStep("Analyzing images...");
+    
+    try {
+      setGenerationStep("Converting focus areas...");
+      const paper = await generatePaperFromImages(scannedImages, marks, difficulty);
+      setGenerationStep("Finalizing structure...");
+      setCurrentPaper(paper);
+      setArchive(prev => [paper, ...prev]);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to generate paper. Please check your API key in Secrets.");
+    } finally {
       setIsGenerating(false);
-      // In a real app, we'd call an API here
-      const newPaper = { ...CHAPTER_1_PAPER, id: Date.now().toString(), totalMarks: marks };
-      setCurrentPaper(newPaper);
-      setArchive(prev => [newPaper, ...prev]);
-    }, 2000);
+      setGenerationStep("");
+    }
   };
 
   return (
@@ -128,17 +142,27 @@ export default function App() {
           <div className="bg-dark-surface border border-dark-border rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Source Content</span>
-              <label className="bg-accent-green-muted text-accent-green text-[10px] font-bold px-3 py-1 rounded-full hover:brightness-125 transition-all cursor-pointer">
-                ADD PAGE SCAN
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  multiple 
-                  className="hidden" 
-                  onChange={handleFileUpload}
-                  disabled={isGenerating}
-                />
-              </label>
+              <div className="flex gap-2">
+                {scannedImages.length > 0 && (
+                  <button 
+                    onClick={() => setScannedImages([])}
+                    className="text-[10px] text-slate-500 hover:text-red-400 font-bold transition-colors"
+                  >
+                    CLEAR ALL
+                  </button>
+                )}
+                <label className="bg-accent-green-muted text-accent-green text-[10px] font-bold px-3 py-1 rounded-full hover:brightness-125 transition-all cursor-pointer">
+                  ADD PAGE SCAN
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    className="hidden" 
+                    onChange={handleFileUpload}
+                    disabled={isGenerating}
+                  />
+                </label>
+              </div>
             </div>
 
             {scannedImages.length > 0 ? (
@@ -210,18 +234,28 @@ export default function App() {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-lg text-red-400 text-xs">
+              <p className="font-bold mb-1">Generation Failed</p>
+              <p>{error}</p>
+            </div>
+          )}
+
           <div className="mt-auto flex flex-col gap-3">
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="w-full bg-accent-green text-black font-bold py-3.5 rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+              className={cn(
+                "w-full font-bold py-3.5 rounded-lg transition-all flex items-center justify-center gap-2 group disabled:opacity-50",
+                isGenerating ? "bg-dark-panel text-slate-400" : "bg-accent-green text-black hover:brightness-110"
+              )}
             >
               {isGenerating ? (
-                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-slate-600 border-t-accent-green rounded-full animate-spin" />
               ) : (
                 <Beaker className="w-4 h-4 group-hover:scale-110 transition-transform" />
               )}
-              {isGenerating ? "ANALYZING..." : "REGENERATE PAPER"}
+              {isGenerating ? generationStep.toUpperCase() : "REGENERATE PAPER"}
             </button>
 
             <button 

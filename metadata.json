@@ -1,6 +1,6 @@
 {
   "name": "EduGen: Question Paper Architect",
-  "description": "A professional tool for generating structured science question papers based on educational content.",
+  "description": "AI-powered tool to generate professional question papers from textbook page images, featuring automated analysis, archive management, and printable layouts.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
