@@ -45,6 +45,51 @@ const PAPER_SCHEMA = {
   required: ["title", "subject", "chapter", "totalMarks", "time", "sections"]
 };
 
+/**
+ * Resizes an image to a maximum dimension to optimize AI processing speed
+ */
+async function optimizeImage(imageUrl: string): Promise<{ inlineData: { mimeType: string, data: string } }> {
+  const response = await fetch(imageUrl);
+  const blob = await response.blob();
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_DIM = 1024;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const base64 = dataUrl.split(',')[1];
+      
+      URL.revokeObjectURL(img.src);
+      resolve({
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: base64
+        }
+      });
+    };
+  });
+}
+
 export async function generatePaperFromImages(
   images: { url: string }[], 
   targetMarks: number, 
@@ -54,40 +99,21 @@ export async function generatePaperFromImages(
     throw new Error("GEMINI_API_KEY is not configured in Secrets.");
   }
 
-  // Convert blob URLs to base64
-  const imageParts = await Promise.all(images.map(async (img) => {
-    const response = await fetch(img.url);
-    const blob = await response.blob();
-    return new Promise<{ inlineData: { mimeType: string, data: string } }>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        resolve({
-          inlineData: {
-            mimeType: blob.type,
-            data: base64
-          }
-        });
-      };
-      reader.readAsDataURL(blob);
-    });
-  }));
+  // Optimize and convert images concurrently
+  const imageParts = await Promise.all(images.map(img => optimizeImage(img.url)));
 
   const prompt = `
-    Analyze the provided textbook page images and generate a professional academic question paper.
+    Analyze the provided textbook images and generate a high-quality academic question paper.
     
-    Target Specifications:
-    - Total Marks: ${targetMarks}
-    - Difficulty Level: ${difficulty}
-    - Chapter: Extract from context (e.g. Science Class 10 Chapter 1)
+    Target Specs:
+    - Marks: ${targetMarks}
+    - Difficulty: ${difficulty}
+    - Flow: Professional, Board-style layout
     
-    Guidelines:
-    1. Extract core concepts from the images to form questions.
-    2. Ensure a mix of MCQ (1m), VSA (2m), SA (3m), and LA (5m) questions to reach exactly ${targetMarks} marks.
-    3. The tone should be formal and academic.
-    4. Options for MCQs should be plausible.
-    
-    Return the result strictly as a valid JSON object matching the defined schema.
+    Instructions:
+    1. Extract relevant concepts to form questions.
+    2. Distribution should match exactly ${targetMarks} marks.
+    3. Return strictly valid JSON.
   `;
 
   try {
