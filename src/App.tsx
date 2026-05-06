@@ -359,6 +359,7 @@ export default function App() {
           >
             {/* Paper Header */}
             <div className="text-center pb-6 border-b-2 border-black border-double mb-8">
+              <p className="text-sm italic text-slate-600 mb-2 font-medium">Made by Ravi Kishan</p>
               <h2 className="text-xl font-bold tracking-tight uppercase mb-2">{currentPaper.title}</h2>
               <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                 <span>Time: {currentPaper.time}</span>
