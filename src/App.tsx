@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, Printer, CheckCircle2, ChevronDown, ChevronUp, 
   Beaker, GraduationCap, Clock, BookOpen, LayoutDashboard, 
-  Library, Archive, Settings, Share2, Search, LogOut
+  Library, Archive, Settings, Share2, Search, LogOut, Users
 } from 'lucide-react';
 import { CHAPTER_1_PAPER, Question, Section, ViewState, Paper } from './types';
 import { cn } from './lib/utils';
@@ -18,6 +18,7 @@ import { generatePaperFromImages } from './services/geminiService';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewState>('config');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,18 +33,29 @@ export default function App() {
   useEffect(() => {
     // Check if previously logged in securely in a real app
     const authStatus = localStorage.getItem('isAuthenticated');
-    if (authStatus === 'true') {
+    const userEmail = localStorage.getItem('currentUserEmail');
+    if (authStatus === 'true' && userEmail) {
       setIsAuthenticated(true);
+      setCurrentUserEmail(userEmail);
+    }
+
+    const storedPapers = localStorage.getItem('allPapers');
+    if (storedPapers) {
+      setArchive(JSON.parse(storedPapers));
     }
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = (email: string) => {
     localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('currentUserEmail', email);
+    setCurrentUserEmail(email);
     setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('currentUserEmail');
+    setCurrentUserEmail(null);
     setIsAuthenticated(false);
   };
 
@@ -90,8 +102,14 @@ export default function App() {
       setGenerationStep("Converting focus areas...");
       const paper = await generatePaperFromImages(scannedImages, marks, difficulty);
       setGenerationStep("Finalizing structure...");
-      setCurrentPaper(paper);
-      setArchive(prev => [paper, ...prev]);
+      
+      const newPaper = { ...paper, authorEmail: currentUserEmail || 'Unknown' };
+      setCurrentPaper(newPaper);
+      setArchive(prev => {
+        const next = [newPaper, ...prev];
+        localStorage.setItem('allPapers', JSON.stringify(next));
+        return next;
+      });
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to generate paper. Please check your API key in Secrets.");
@@ -131,6 +149,12 @@ export default function App() {
             label="Archive" 
             active={activeView === 'archive'}
             onClick={() => setActiveView('archive')}
+          />
+          <NavItem 
+            icon={<Users className="w-4 h-4" />} 
+            label="User Accounts" 
+            active={activeView === 'users'}
+            onClick={() => setActiveView('users')}
           />
           <NavItem 
             icon={<Settings className="w-4 h-4" />} 
@@ -368,6 +392,80 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
+        </main>
+      )}
+
+      {activeView === 'users' && (
+        <main className="flex-1 flex flex-col p-8 gap-6 overflow-y-auto print:hidden">
+          <h1 className="text-2xl font-medium text-white tracking-tight">User Accounts & Papers</h1>
+          <div className="space-y-6">
+            {JSON.parse(localStorage.getItem('users') || '[]').map((user: any) => {
+              const userPapers = archive.filter(p => p.authorEmail === user.email);
+              return (
+                <div key={user.email} className="bg-dark-surface border border-dark-border rounded-xl overflow-hidden">
+                  <div className="bg-dark-panel p-4 border-b border-dark-border flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-accent-green font-bold text-lg uppercase">
+                      {user.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white">{user.name}</h3>
+                      <p className="text-xs text-slate-400">{user.email}</p>
+                    </div>
+                    <div className="ml-auto text-right">
+                      <span className="bg-accent-green-muted text-accent-green text-[10px] font-bold px-3 py-1 rounded-full">
+                        {userPapers.length} {userPapers.length === 1 ? 'Paper' : 'Papers'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    {userPapers.length > 0 ? (
+                      <div className="space-y-2">
+                        {userPapers.map((paper, idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-dark-border/50 last:border-0 hover:bg-dark-bg transition-colors cursor-pointer rounded px-2"
+                            onClick={() => {
+                              setCurrentPaper(paper);
+                              setActiveView('config');
+                            }}
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-slate-200">{paper.title}</p>
+                              <p className="text-[10px] text-slate-500">{paper.chapter}</p>
+                            </div>
+                            <span className="text-xs text-slate-500 font-mono">{paper.generatedAt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 text-center py-4 italic">No papers generated yet.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            
+            {/* Show papers with no author or unknown author as well under an "Unknown/Legacy" bucket if any exist */}
+            {archive.filter(p => !p.authorEmail || p.authorEmail === 'Unknown').length > 0 && (
+              <div className="bg-dark-surface border border-dark-border rounded-xl flex flex-col p-6">
+                <h3 className="font-bold text-white mb-2">Legacy Papers (Unknown Author)</h3>
+                 <div className="space-y-2 mt-2">
+                  {archive.filter(p => !p.authorEmail || p.authorEmail === 'Unknown').map((paper, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-2 border-b border-dark-border/50 last:border-0 hover:bg-dark-bg transition-colors cursor-pointer rounded px-2"
+                      onClick={() => {
+                        setCurrentPaper(paper);
+                        setActiveView('config');
+                      }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-200">{paper.title}</p>
+                        <p className="text-[10px] text-slate-500">{paper.chapter}</p>
+                      </div>
+                      <span className="text-xs text-slate-500 font-mono">{paper.generatedAt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </main>
       )}

@@ -1,5 +1,5 @@
 export type QuestionType = 'MCQ' | 'VSA' | 'SA' | 'LA' | 'CASE';
-export type ViewState = 'config' | 'archive' | 'library' | 'settings';
+export type ViewState = 'config' | 'archive' | 'library' | 'settings' | 'users';
 
 export interface Question {
   id: string;
@@ -25,6 +25,7 @@ export interface Paper {
   time: string;
   sections: Section[];
   generatedAt: string;
+  authorEmail?: string;
 }
 
 export const CHAPTER_1_PAPER: Paper = {

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { LayoutDashboard, Lock, Mail, User } from 'lucide-react';
 
 interface AuthProps {
-  onLogin: () => void;
+  onLogin: (email: string) => void;
 }
 
 export default function Auth({ onLogin }: AuthProps) {
@@ -22,7 +22,7 @@ export default function Auth({ onLogin }: AuthProps) {
         const storedUserstr = localStorage.getItem('users');
         const users = storedUserstr ? JSON.parse(storedUserstr) : [];
         if (users.find((u: any) => u.email === email && u.password === password)) {
-           onLogin();
+           onLogin(email);
         } else {
            alert("Invalid email or password. Please sign up if you don't have an account.");
         }
@@ -34,7 +34,7 @@ export default function Auth({ onLogin }: AuthProps) {
         } else {
            users.push({ email, password, name });
            localStorage.setItem('users', JSON.stringify(users));
-           onLogin();
+           onLogin(email);
         }
       }
     }
