@@ -3,19 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, Printer, CheckCircle2, ChevronDown, ChevronUp, 
   Beaker, GraduationCap, Clock, BookOpen, LayoutDashboard, 
-  Library, Archive, Settings, Share2, Search
+  Library, Archive, Settings, Share2, Search, LogOut
 } from 'lucide-react';
 import { CHAPTER_1_PAPER, Question, Section, ViewState, Paper } from './types';
 import { cn } from './lib/utils';
+import Auth from './Auth';
 
 import { generatePaperFromImages } from './services/geminiService';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState<ViewState>('config');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,24 @@ export default function App() {
     { ...CHAPTER_1_PAPER, id: 'p0', title: 'Unit Test - April', generatedAt: '2024-04-12' }
   ]);
   const [scannedImages, setScannedImages] = useState<{ id: string; url: string; name: string }[]>([]);
+
+  useEffect(() => {
+    // Check if previously logged in securely in a real app
+    const authStatus = localStorage.getItem('isAuthenticated');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleLogin = () => {
+    localStorage.setItem('isAuthenticated', 'true');
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated');
+    setIsAuthenticated(false);
+  };
 
   const handlePrint = () => {
     window.print();
@@ -81,6 +101,10 @@ export default function App() {
     }
   };
 
+  if (!isAuthenticated) {
+    return <Auth onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-dark-bg font-sans text-slate-200 flex flex-col md:flex-row print:bg-white print:text-black">
       {/* Sidebar - Left Section */}
@@ -118,10 +142,17 @@ export default function App() {
 
         <div className="mt-auto pt-6 border-t border-dark-border">
           <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-3">Recent Generation</p>
-          <div className="space-y-1">
+          <div className="space-y-1 mb-4">
             <p className="text-sm font-medium text-slate-200 truncate">{currentPaper.title}</p>
             <p className="text-[10px] text-slate-500">Last updated recently</p>
           </div>
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors py-2"
+          >
+            <LogOut className="w-3 h-3" />
+            Sign Out
+          </button>
         </div>
       </aside>
 
@@ -219,6 +250,7 @@ export default function App() {
                 <option>Challenging</option>
                 <option>Conceptual</option>
                 <option>Board Pattern</option>
+                <option>Expected Questions (Board Analysis)</option>
               </select>
             </div>
           </div>
@@ -350,12 +382,20 @@ export default function App() {
         </div>
 
         {/* The Paper Sheet */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 print:overflow-visible">
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 print:overflow-visible relative">
+          
+          {/* Repeating Watermark for Print */}
+          <div className="hidden print:flex fixed inset-0 pointer-events-none z-0 items-center justify-center opacity-10">
+            <div className="-rotate-45 text-[8rem] font-bold text-black whitespace-nowrap">
+              Made by Ravi Kishan
+            </div>
+          </div>
+
           <motion.div 
             key={currentPaper.id}
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white text-black min-h-screen rounded-sm p-10 md:p-14 shadow-2xl font-serif text-[12px] md:text-sm leading-relaxed print:shadow-none print:p-0"
+            className="bg-white text-black min-h-screen rounded-sm p-10 md:p-14 shadow-2xl font-serif text-[12px] md:text-sm leading-relaxed print:shadow-none print:p-0 relative z-10"
           >
             {/* Paper Header */}
             <div className="text-center pb-6 border-b-2 border-black border-double mb-8">
