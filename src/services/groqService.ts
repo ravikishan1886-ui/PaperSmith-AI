@@ -1,6 +1,71 @@
 
 import { Paper } from "../types";
 
+export async function extractTextFromImages(images: { url: string }[]): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("GROQ_API_KEY is not configured in the Secrets menu.");
+  }
+
+  // Convert blob URLs to data URLs
+  const imagePromises = images.map(async (img) => {
+    const response = await fetch(img.url);
+    const blob = await response.blob();
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  });
+
+  const base64Images = await Promise.all(imagePromises);
+
+  // We use the vision model to extract text
+  // Groq supports multiple images in a single call or sequential
+  // For simplicity and robustness, we'll process them in one prompt if count is low, 
+  // but better to join them.
+  
+  const messages = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Extract all academic and textbook content from these images clearly. Preserve headings and structure as text." },
+        ...base64Images.map(url => ({
+          type: "image_url",
+          image_url: { url }
+        }))
+      ]
+    }
+  ];
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        messages,
+        model: "llama-3.2-11b-vision-preview",
+        temperature: 0.1,
+        max_completion_tokens: 4096
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || `Groq Vision Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0]?.message?.content || "";
+  } catch (error: any) {
+    console.error("Groq Text Extraction Error:", error);
+    throw error;
+  }
+}
+
 export async function generatePaperFromText(
   text: string, 
   targetMarks: number, 

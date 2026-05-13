@@ -14,14 +14,13 @@ import { CHAPTER_1_PAPER, Question, Section, ViewState, Paper } from './types';
 import { cn } from './lib/utils';
 import Auth from './Auth';
 
-import { generatePaperFromImages, extractTextFromImages } from './services/geminiService';
-import { generatePaperFromText } from './services/groqService';
+import { generatePaperFromText, extractTextFromImages } from './services/groqService';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewState>('config');
-  const [aiProvider, setAiProvider] = useState<'Gemini' | 'Groq'>('Gemini');
+  const [aiProvider, setAiProvider] = useState<'Groq'>('Groq');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPaper, setCurrentPaper] = useState<Paper>(CHAPTER_1_PAPER);
@@ -101,17 +100,10 @@ export default function App() {
     setGenerationStep("Analyzing images...");
     
     try {
-      let paper: Paper;
-
-      if (aiProvider === 'Gemini') {
-        setGenerationStep("Converting focus areas...");
-        paper = await generatePaperFromImages(scannedImages, marks, difficulty);
-      } else {
-        setGenerationStep("Extracting text via Gemini...");
-        const extractedText = await extractTextFromImages(scannedImages);
-        setGenerationStep("Generating paper via Groq...");
-        paper = await generatePaperFromText(extractedText, marks, difficulty);
-      }
+      setGenerationStep("Extracting text via Groq...");
+      const extractedText = await extractTextFromImages(scannedImages);
+      setGenerationStep("Generating paper via Groq...");
+      const paper = await generatePaperFromText(extractedText, marks, difficulty);
 
       setGenerationStep("Finalizing structure...");
       
@@ -268,14 +260,10 @@ export default function App() {
             <div className="grid grid-cols-2 gap-5">
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">AI Provider</span>
-                <select 
-                  value={aiProvider}
-                  onChange={(e) => setAiProvider(e.target.value as any)}
-                  className="bg-dark-panel p-4 rounded-xl border border-dark-border text-sm font-bold text-white outline-none cursor-pointer"
-                >
-                  <option value="Gemini">Gemini (Multimodal)</option>
-                  <option value="Groq">Groq (Llama 3.1 8B)</option>
-                </select>
+                <div className="bg-dark-panel p-4 rounded-xl border border-dark-border text-sm font-bold text-white flex items-center justify-between">
+                  <span>Groq (Llama 3.3)</span>
+                  <span className="text-[10px] text-accent-green bg-accent-green-muted px-2 py-0.5 rounded italic">Vision Ready</span>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Difficulty</span>
