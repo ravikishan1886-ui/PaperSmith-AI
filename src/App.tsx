@@ -14,12 +14,14 @@ import { CHAPTER_1_PAPER, Question, Section, ViewState, Paper } from './types';
 import { cn } from './lib/utils';
 import Auth from './Auth';
 
-import { generatePaperFromImages } from './services/geminiService';
+import { generatePaperFromImages, extractTextFromImages } from './services/geminiService';
+import { generatePaperFromText } from './services/groqService';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewState>('config');
+  const [aiProvider, setAiProvider] = useState<'Gemini' | 'Groq'>('Gemini');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPaper, setCurrentPaper] = useState<Paper>(CHAPTER_1_PAPER);
@@ -99,8 +101,18 @@ export default function App() {
     setGenerationStep("Analyzing images...");
     
     try {
-      setGenerationStep("Converting focus areas...");
-      const paper = await generatePaperFromImages(scannedImages, marks, difficulty);
+      let paper: Paper;
+
+      if (aiProvider === 'Gemini') {
+        setGenerationStep("Converting focus areas...");
+        paper = await generatePaperFromImages(scannedImages, marks, difficulty);
+      } else {
+        setGenerationStep("Extracting text via Gemini...");
+        const extractedText = await extractTextFromImages(scannedImages);
+        setGenerationStep("Generating paper via Groq...");
+        paper = await generatePaperFromText(extractedText, marks, difficulty);
+      }
+
       setGenerationStep("Finalizing structure...");
       
       const newPaper = { ...paper, authorEmail: currentUserEmail || 'Unknown' };
@@ -253,8 +265,34 @@ export default function App() {
             )}
           </div>
 
-          {/* Configuration Grid */}
-          <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-2 gap-5">
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">AI Provider</span>
+                <select 
+                  value={aiProvider}
+                  onChange={(e) => setAiProvider(e.target.value as any)}
+                  className="bg-dark-panel p-4 rounded-xl border border-dark-border text-sm font-bold text-white outline-none cursor-pointer"
+                >
+                  <option value="Gemini">Gemini (Multimodal)</option>
+                  <option value="Groq">Groq (Llama 3.1 8B)</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Difficulty</span>
+                <select 
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  className="bg-dark-panel p-4 rounded-xl border border-dark-border text-sm font-bold text-white outline-none cursor-pointer"
+                >
+                  <option>Standard</option>
+                  <option>Challenging</option>
+                  <option>Conceptual</option>
+                  <option>Board Pattern</option>
+                  <option>Expected Questions (Board Analysis)</option>
+                </select>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-2">
               <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Total Marks</span>
               <div className="bg-dark-panel p-4 rounded-xl border border-dark-border flex items-center justify-between">
@@ -263,21 +301,6 @@ export default function App() {
                 <button onClick={() => setMarks(m => Math.min(100, m + 5))} className="text-slate-400 hover:text-white">+</button>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Difficulty</span>
-              <select 
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                className="bg-dark-panel p-4 rounded-xl border border-dark-border text-sm font-bold text-white outline-none cursor-pointer"
-              >
-                <option>Standard</option>
-                <option>Challenging</option>
-                <option>Conceptual</option>
-                <option>Board Pattern</option>
-                <option>Expected Questions (Board Analysis)</option>
-              </select>
-            </div>
-          </div>
 
           {/* Question Distribution */}
           <div className="flex flex-col gap-3">

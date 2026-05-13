@@ -154,3 +154,23 @@ export async function generatePaperFromImages(
     throw error;
   }
 }
+
+export async function extractTextFromImages(images: { url: string }[]): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured in Secrets.");
+  }
+
+  const imageParts = await Promise.all(images.map(img => optimizeImage(img.url)));
+
+  const result = await ai.models.generateContent({
+    model: "gemini-flash-latest",
+    contents: {
+      parts: [
+        ...imageParts,
+        { text: "Extract all text from these images as cleanly as possible for academic use. Preserve the hierarchy if clear." }
+      ]
+    }
+  });
+
+  return result.text || "";
+}
