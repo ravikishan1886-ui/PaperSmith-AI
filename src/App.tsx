@@ -100,9 +100,9 @@ export default function App() {
     setGenerationStep("Analyzing images...");
     
     try {
-      setGenerationStep("Extracting text via Groq...");
+      setGenerationStep("Processing images...");
       const extractedText = await extractTextFromImages(scannedImages);
-      setGenerationStep("Generating paper via Groq...");
+      setGenerationStep("Generating paper via AI...");
       const paper = await generatePaperFromText(extractedText, marks, difficulty);
 
       setGenerationStep("Finalizing structure...");
@@ -259,10 +259,13 @@ export default function App() {
 
             <div className="grid grid-cols-2 gap-5">
               <div className="flex flex-col gap-2">
-                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">AI Provider</span>
-                <div className="bg-dark-panel p-4 rounded-xl border border-dark-border text-sm font-bold text-white flex items-center justify-between">
-                  <span>Groq (Llama 3.3)</span>
-                  <span className="text-[10px] text-accent-green bg-accent-green-muted px-2 py-0.5 rounded italic">Vision Ready</span>
+                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Generation Stack</span>
+                <div className="bg-dark-panel p-4 rounded-xl border border-dark-border flex flex-col gap-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-white">Hybrid Vision + GPT-OSS</span>
+                    <span className="text-[10px] text-accent-green bg-accent-green-muted px-2 py-0.5 rounded italic">Optimized</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">Scout Vision + 120B Reasoning Model</p>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
