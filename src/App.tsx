@@ -91,18 +91,17 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (scannedImages.length === 0) {
-      alert("Please upload at least one textbook page image first.");
+      setError("Please upload at least one textbook page image first.");
       return;
     }
     
     setIsGenerating(true);
     setError(null);
-    setGenerationStep("Analyzing images...");
+    setGenerationStep("Extracting text via Qwen 3.8 Vision...");
     
     try {
-      setGenerationStep("Processing images...");
       const extractedText = await extractTextFromImages(scannedImages);
-      setGenerationStep("Generating paper via AI...");
+      setGenerationStep("Architecting exam paper via GPT-OSS 120B...");
       const paper = await generatePaperFromText(extractedText, marks, difficulty);
 
       setGenerationStep("Finalizing structure...");
@@ -116,7 +115,7 @@ export default function App() {
       });
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to generate paper. Please check your API key in Secrets.");
+      setError(err.message || "Failed to generate paper. Please check connection and try again.");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -265,7 +264,7 @@ export default function App() {
                     <span className="text-sm font-bold text-white">Hybrid Vision + GPT-OSS</span>
                     <span className="text-[10px] text-accent-green bg-accent-green-muted px-2 py-0.5 rounded italic">Optimized</span>
                   </div>
-                  <p className="text-[10px] text-slate-500">Scout Vision + 120B Reasoning Model</p>
+                  <p className="text-[10px] text-slate-500">Qwen 3.8 Vision + GPT-OSS 120B Reasoning</p>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
