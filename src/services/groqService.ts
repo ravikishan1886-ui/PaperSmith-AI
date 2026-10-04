@@ -109,13 +109,24 @@ export async function extractTextFromImages(images: { url: string }[]): Promise<
       if (apiData.text && apiData.text.trim().length > 0) {
         return apiData.text;
       }
+    } else {
+      const errJson = await apiRes.json().catch(() => ({}));
+      if (errJson.error) {
+        throw new Error(errJson.error);
+      }
     }
-  } catch (serverErr) {
+  } catch (serverErr: any) {
+    if (serverErr.message && !serverErr.message.includes("fetch")) {
+      throw serverErr;
+    }
     console.warn("Server proxy text extraction unavailable, using direct Groq client:", serverErr);
   }
 
   // Strategy 2: Direct Groq Vision API call with qwen/qwen3.8-27b
   const apiKey = getApiKey();
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error("GROQ_API_KEY is not configured. Please ensure GROQ_API_KEY is defined in .env");
+  }
   const chunkSize = 2; // Chunk size 2 prevents payload overflow and image count errors
   let fullExtraction = "";
 
@@ -181,13 +192,24 @@ export async function generatePaperFromText(
       if (apiData.paper) {
         return apiData.paper;
       }
+    } else {
+      const errJson = await apiRes.json().catch(() => ({}));
+      if (errJson.error) {
+        throw new Error(errJson.error);
+      }
     }
-  } catch (serverErr) {
+  } catch (serverErr: any) {
+    if (serverErr.message && !serverErr.message.includes("fetch")) {
+      throw serverErr;
+    }
     console.warn("Server proxy paper generation unavailable, using direct Groq client:", serverErr);
   }
 
   // Strategy 2: Direct Groq API call with openai/gpt-oss-120b
   const apiKey = getApiKey();
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error("GROQ_API_KEY is not configured. Please ensure GROQ_API_KEY is defined in .env");
+  }
 
   const prompt = `
     Analyze the following textbook content and generate a complete, high-quality academic question paper.

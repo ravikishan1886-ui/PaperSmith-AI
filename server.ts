@@ -6,8 +6,22 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+import fs from 'fs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables with fallbacks
+dotenv.config();
+if (!process.env.GROQ_API_KEY) {
+  for (const f of ['.env.local', '.env.example']) {
+    const fullPath = path.resolve(__dirname, f);
+    if (fs.existsSync(fullPath)) {
+      dotenv.config({ path: fullPath, override: true });
+      if (process.env.GROQ_API_KEY) break;
+    }
+  }
+}
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -15,13 +29,31 @@ const PORT = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+function getGroqApiKey(): string {
+  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim() !== '') {
+    return process.env.GROQ_API_KEY.trim();
+  }
+  for (const f of ['.env', '.env.local', '.env.example']) {
+    try {
+      const fullPath = path.resolve(__dirname, f);
+      if (fs.existsSync(fullPath)) {
+        const text = fs.readFileSync(fullPath, 'utf-8');
+        const match = text.match(/^GROQ_API_KEY=(.+)$/m);
+        if (match && match[1]?.trim()) {
+          return match[1].trim();
+        }
+      }
+    } catch {}
+  }
+  return '';
+}
 
 // API endpoints
 app.post('/api/extract-text', async (req, res) => {
   try {
-    if (!GROQ_API_KEY) {
-      return res.status(500).json({ error: "GROQ_API_KEY is not configured in environment variables." });
+    const apiKey = getGroqApiKey();
+    if (!apiKey) {
+      return res.status(500).json({ error: "GROQ_API_KEY is not configured. Please add it to your environment or .env file." });
     }
 
     const { images } = req.body;
@@ -55,7 +87,7 @@ app.post('/api/extract-text', async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "User-Agent": "PaperSmith/1.0"
         },
         body: JSON.stringify({
@@ -85,8 +117,9 @@ app.post('/api/extract-text', async (req, res) => {
 
 app.post('/api/generate-paper', async (req, res) => {
   try {
-    if (!GROQ_API_KEY) {
-      return res.status(500).json({ error: "GROQ_API_KEY is not configured in environment variables." });
+    const apiKey = getGroqApiKey();
+    if (!apiKey) {
+      return res.status(500).json({ error: "GROQ_API_KEY is not configured. Please add it to your environment or .env file." });
     }
 
     const { text, targetMarks, difficulty } = req.body;
@@ -161,7 +194,7 @@ Return strictly a valid JSON object matching this schema (no extra commentary, o
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
         "User-Agent": "PaperSmith/1.0"
       },
       body: JSON.stringify({
