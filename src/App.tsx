@@ -22,7 +22,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewState>('config');
   const [aiProvider, setAiProvider] = useState<'Groq'>('Groq');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorInfo, setErrorInfo] = useState<{ message: string; type?: string } | null>(null);
   const [currentPaper, setCurrentPaper] = useState<Paper>(CHAPTER_1_PAPER);
   const [marks, setMarks] = useState(40);
   const [difficulty, setDifficulty] = useState('Standard');
@@ -91,12 +91,12 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (scannedImages.length === 0) {
-      setError("Please upload at least one textbook page image first.");
+      setErrorInfo({ message: "Please upload at least one textbook page image first." });
       return;
     }
     
     setIsGenerating(true);
-    setError(null);
+    setErrorInfo(null);
     setGenerationStep("Extracting text via Qwen 3.8 Vision...");
     
     try {
@@ -114,8 +114,11 @@ export default function App() {
         return next;
       });
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to generate paper. Please check connection and try again.");
+      console.error("[Generation Error]:", err);
+      setErrorInfo({
+        message: err.message || "Failed to generate paper. Please check connection and try again.",
+        type: err.errorType
+      });
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -303,10 +306,46 @@ export default function App() {
             </div>
           </div>
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-lg text-red-400 text-xs">
-              <p className="font-bold mb-1">Generation Failed</p>
-              <p>{error}</p>
+          {errorInfo && (
+            <div className={cn(
+              "p-4 rounded-xl border text-xs flex flex-col gap-2 transition-all",
+              errorInfo.type === 'missing_api_key' || errorInfo.type === 'invalid_api_key'
+                ? "bg-amber-500/10 border-amber-500/40 text-amber-200"
+                : errorInfo.type === 'rate_limit'
+                ? "bg-sky-500/10 border-sky-500/40 text-sky-200"
+                : "bg-red-500/10 border-red-500/40 text-red-300"
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold">
+                  <span className="uppercase tracking-widest text-[9px] px-2 py-0.5 rounded-full bg-black/50 text-white border border-white/10">
+                    {errorInfo.type === 'missing_api_key' ? 'Missing API Key' :
+                     errorInfo.type === 'invalid_api_key' ? 'Invalid API Key' :
+                     errorInfo.type === 'rate_limit' ? 'Rate Limit Exceeded' :
+                     errorInfo.type === 'invalid_model' ? 'Model Error' :
+                     errorInfo.type === 'permission_error' ? 'Permission Error' : 'Generation Error'}
+                  </span>
+                  <span>{errorInfo.type === 'invalid_api_key' ? 'Groq Authentication Failed' : 'Generation Failed'}</span>
+                </div>
+                <button 
+                  onClick={() => setErrorInfo(null)}
+                  className="text-[10px] text-slate-400 hover:text-white"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <p className="leading-relaxed">{errorInfo.message}</p>
+              {errorInfo.type === 'missing_api_key' && (
+                <div className="text-[11px] bg-black/40 p-2.5 rounded-lg border border-amber-500/20 text-slate-300 space-y-1">
+                  <p className="font-semibold text-amber-300">How to configure:</p>
+                  <p>Add <code className="text-amber-200 bg-white/10 px-1 py-0.5 rounded">GROQ_API_KEY=your_key_here</code> to your <code className="text-amber-200 bg-white/10 px-1 py-0.5 rounded">.env.local</code> file locally or set it in your deployment platform's environment variables.</p>
+                </div>
+              )}
+              {errorInfo.type === 'invalid_api_key' && (
+                <div className="text-[11px] bg-black/40 p-2.5 rounded-lg border border-amber-500/20 text-slate-300 space-y-1">
+                  <p className="font-semibold text-amber-300">How to fix:</p>
+                  <p>Verify that your key in <code className="text-amber-200 bg-white/10 px-1 py-0.5 rounded">.env.local</code> or environment is active and has not expired or been revoked in your Groq Console.</p>
+                </div>
+              )}
             </div>
           )}
 

@@ -1,33 +1,17 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import fs from 'fs';
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
-  let groqKey = env.GROQ_API_KEY || '';
-  if (!groqKey) {
-    for (const f of ['.env', '.env.local', '.env.example']) {
-      try {
-        const fullPath = path.resolve(__dirname, f);
-        if (fs.existsSync(fullPath)) {
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          const match = content.match(/^GROQ_API_KEY=(.+)$/m);
-          if (match && match[1]?.trim()) {
-            groqKey = match[1].trim();
-            break;
-          }
-        }
-      } catch {}
-    }
-  }
   const imgbbKey = env.IMGBB_API_KEY || '';
 
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.GROQ_API_KEY': JSON.stringify(groqKey),
+      // Note: GROQ_API_KEY is deliberately omitted from client bundle to protect credentials.
+      // All AI generation and OCR requests are handled server-side via Express proxy routes.
       'process.env.IMGBB_API_KEY': JSON.stringify(imgbbKey),
     },
     resolve: {

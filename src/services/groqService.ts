@@ -1,13 +1,14 @@
 import { Paper } from "../types";
 
-function getApiKey(): string {
-  const envKey = process.env.GROQ_API_KEY;
-  if (envKey && envKey !== "undefined" && envKey.trim() !== "") {
-    return envKey;
-  }
-  return "";
+export interface GroqServiceError extends Error {
+  errorType?: string;
+  statusCode?: number;
 }
 
+/**
+ * Optimizes scanned images on a hidden canvas before sending to server.
+ * Restricts maximum dimension to 1024px to keep payloads lightweight and responsive.
+ */
 async function optimizeImage(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -41,6 +42,9 @@ async function optimizeImage(dataUrl: string): Promise<string> {
   });
 }
 
+/**
+ * Optional image hosting via ImgBB if key is configured in build.
+ */
 async function uploadToImgBB(base64Data: string): Promise<string> {
   const apiKey = process.env.IMGBB_API_KEY;
   if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
@@ -62,14 +66,22 @@ async function uploadToImgBB(base64Data: string): Promise<string> {
     }
 
     const data = await response.json();
-    return data.data.url;
+    return data.data?.url || base64Data;
   } catch (error) {
-    console.warn("ImgBB upload failed, using direct image data:", error);
+    console.warn("ImgBB upload failed, proceeding with direct image data:", error);
     return base64Data;
   }
 }
 
+/**
+ * Extracts academic text from scanned textbook images via server-side Groq Vision proxy.
+ * Groq API key is never exposed to the client.
+ */
 export async function extractTextFromImages(images: { url: string }[]): Promise<string> {
+  if (!images || images.length === 0) {
+    throw new Error("No images provided for text extraction.");
+  }
+
   // Convert blob URLs to optimized data URLs
   const imageUrlPromises = images.map(async (img) => {
     const response = await fetch(img.url);
@@ -96,207 +108,64 @@ export async function extractTextFromImages(images: { url: string }[]): Promise<
 
   const remoteUrls = await Promise.all(imageUrlPromises);
 
-  // Strategy 1: Attempt server proxy route /api/extract-text
-  try {
-    const apiRes = await fetch("/api/extract-text", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ images: remoteUrls })
-    });
+  // Send request securely to server proxy
+  const apiRes = await fetch("/api/extract-text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ images: remoteUrls })
+  });
 
-    if (apiRes.ok) {
-      const apiData = await apiRes.json();
-      if (apiData.text && apiData.text.trim().length > 0) {
-        return apiData.text;
-      }
-    } else {
-      const errJson = await apiRes.json().catch(() => ({}));
-      if (errJson.error) {
-        throw new Error(errJson.error);
-      }
-    }
-  } catch (serverErr: any) {
-    if (serverErr.message && !serverErr.message.includes("fetch")) {
-      throw serverErr;
-    }
-    console.warn("Server proxy text extraction unavailable, using direct Groq client:", serverErr);
+  if (!apiRes.ok) {
+    const errorPayload = await apiRes.json().catch(() => ({}));
+    const err: GroqServiceError = new Error(
+      errorPayload.error || `Server extraction failed with status ${apiRes.status}`
+    );
+    err.errorType = errorPayload.errorType || "server_error";
+    err.statusCode = apiRes.status;
+    throw err;
   }
 
-  // Strategy 2: Direct Groq Vision API call with qwen/qwen3.8-27b
-  const apiKey = getApiKey();
-  if (!apiKey || apiKey.trim() === '') {
-    throw new Error("GROQ_API_KEY is not configured. Please ensure GROQ_API_KEY is defined in .env");
-  }
-  const chunkSize = 2; // Chunk size 2 prevents payload overflow and image count errors
-  let fullExtraction = "";
-
-  for (let i = 0; i < remoteUrls.length; i += chunkSize) {
-    const chunk = remoteUrls.slice(i, i + chunkSize);
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { 
-            type: "text", 
-            text: `Extract all textbook and academic text completely from these images. Preserve question numbering, equations, options, subheadings, diagrams labels, and all exercise content accurately.` 
-          },
-          ...chunk.map(url => ({
-            type: "image_url",
-            image_url: { url }
-          }))
-        ]
-      }
-    ];
-
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        messages,
-        model: "qwen/qwen3.8-27b",
-        temperature: 0.1,
-        max_completion_tokens: 4096
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `Groq Vision Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    fullExtraction += (data.choices?.[0]?.message?.content || "") + "\n\n";
+  const apiData = await apiRes.json();
+  if (!apiData.text || apiData.text.trim().length === 0) {
+    throw new Error("No readable text was detected from the uploaded images. Please ensure clear page scans.");
   }
 
-  return fullExtraction.trim();
+  return apiData.text;
 }
 
+/**
+ * Generates an academic question paper via server-side Groq Reasoning proxy.
+ * Groq API key is never exposed to the client.
+ */
 export async function generatePaperFromText(
   text: string, 
   targetMarks: number, 
   difficulty: string
 ): Promise<Paper> {
-  // Strategy 1: Attempt server proxy route /api/generate-paper
-  try {
-    const apiRes = await fetch("/api/generate-paper", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, targetMarks, difficulty })
-    });
-
-    if (apiRes.ok) {
-      const apiData = await apiRes.json();
-      if (apiData.paper) {
-        return apiData.paper;
-      }
-    } else {
-      const errJson = await apiRes.json().catch(() => ({}));
-      if (errJson.error) {
-        throw new Error(errJson.error);
-      }
-    }
-  } catch (serverErr: any) {
-    if (serverErr.message && !serverErr.message.includes("fetch")) {
-      throw serverErr;
-    }
-    console.warn("Server proxy paper generation unavailable, using direct Groq client:", serverErr);
+  if (!text || text.trim().length === 0) {
+    throw new Error("Text content is required to generate a question paper.");
   }
 
-  // Strategy 2: Direct Groq API call with openai/gpt-oss-120b
-  const apiKey = getApiKey();
-  if (!apiKey || apiKey.trim() === '') {
-    throw new Error("GROQ_API_KEY is not configured. Please ensure GROQ_API_KEY is defined in .env");
-  }
-
-  const prompt = `
-    Analyze the following textbook content and generate a complete, high-quality academic question paper.
-    
-    Target Specs:
-    - Marks: ${targetMarks}
-    - Difficulty: ${difficulty}
-    - Format: Professional examination layout
-    
-    Content:
-    ${text}
-    
-    Return the response strictly as a valid JSON object matching this schema:
-    {
-      "title": "Unit Examination",
-      "subject": "Academic Subject",
-      "chapter": "Curriculum Unit",
-      "totalMarks": ${targetMarks},
-      "time": "2 Hours",
-      "sections": [
-        {
-          "title": "Section A",
-          "description": "Multiple Choice Questions (1 Mark Each)",
-          "questions": [
-            { "id": "q1", "type": "MCQ", "text": "Question text?", "marks": 1, "options": ["A", "B", "C", "D"] }
-          ]
-        },
-        {
-          "title": "Section B",
-          "description": "Short Answer Questions (2 Marks Each)",
-          "questions": [
-            { "id": "q2", "type": "Short Answer", "text": "Question text?", "marks": 2 }
-          ]
-        },
-        {
-          "title": "Section C",
-          "description": "Long Answer Questions (5 Marks Each)",
-          "questions": [
-            { "id": "q3", "type": "Long Answer", "text": "Question text?", "marks": 5 }
-          ]
-        }
-      ]
-    }
-  `;
-
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const apiRes = await fetch("/api/generate-paper", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      messages: [
-        {
-          role: "system",
-          content: "You are a professional examiner. Always return strictly valid JSON matching the requested structure."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      model: "openai/gpt-oss-120b",
-      temperature: 1,
-      max_completion_tokens: 8192,
-      top_p: 1,
-      reasoning_effort: "medium",
-      response_format: { type: "json_object" }
-    })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, targetMarks, difficulty })
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Groq API error: ${response.status}`);
+  if (!apiRes.ok) {
+    const errorPayload = await apiRes.json().catch(() => ({}));
+    const err: GroqServiceError = new Error(
+      errorPayload.error || `Question paper generation failed with status ${apiRes.status}`
+    );
+    err.errorType = errorPayload.errorType || "server_error";
+    err.statusCode = apiRes.status;
+    throw err;
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  
-  if (!content) {
-    throw new Error("Empty response received from Groq generation model.");
+  const apiData = await apiRes.json();
+  if (!apiData.paper) {
+    throw new Error("Invalid response format received from generation server.");
   }
 
-  const paperData = JSON.parse(content);
-  return {
-    ...paperData,
-    id: Date.now().toString(),
-    generatedAt: new Date().toISOString().split('T')[0]
-  };
+  return apiData.paper;
 }
